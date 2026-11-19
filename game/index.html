@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOLMAR HEAT — Open-World Crime Game</title>
+<style>
+  :root { --accent: #ffd23f; --panel: rgba(10, 14, 22, 0.78); --text: #f2f4f8; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1d3a6e; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text); }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .hidden { display: none !important; }
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 5; }
+  .panel { background: var(--panel); border: 1px solid rgba(255,255,255,0.14); border-radius: 10px; backdrop-filter: blur(3px); }
+  #topleft { position: absolute; top: 14px; left: 14px; padding: 10px 14px; min-width: 210px; }
+  #health-bar { width: 190px; height: 12px; background: #222; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #22c55e, #84cc16); transition: width 0.2s; }
+  #health-fill.low { background: linear-gradient(90deg, #ef4444, #f97316); }
+  #cash { font-size: 22px; font-weight: 800; color: #4ade80; }
+  #health-num { font-size: 12px; color: #cbd5e1; }
+  #topright { position: absolute; top: 14px; right: 14px; padding: 10px 14px; text-align: right; }
+  #stars { font-size: 26px; letter-spacing: 2px; line-height: 1; }
+  #stars .star { color: #475569; }
+  #stars .star.on { color: var(--accent); text-shadow: 0 0 8px rgba(255,210,63,0.8); }
+  #stars.hot .star.on { color: #ef4444; text-shadow: 0 0 10px rgba(239,68,68,0.9); }
+  #clock { font-size: 20px; font-weight: 700; }
+  #timer { display: none; font-size: 18px; font-weight: 800; color: var(--accent); }
+  #timer.urgent { color: #ef4444; }
+  #bottomleft { position: absolute; left: 14px; bottom: 14px; }
+  #minimap { width: 200px; height: 200px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.35); background: #10151d; display: block; }
+  #mission-label { margin-top: 8px; font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--accent); text-shadow: 0 1px 4px #000; }
+  #objective { max-width: 320px; font-size: 14px; text-shadow: 0 1px 4px #000; margin-top: 2px; }
+  #bottomright { position: absolute; right: 14px; bottom: 14px; text-align: right; text-shadow: 0 1px 4px #000; }
+  #speed { font-size: 34px; font-weight: 800; }
+  #ammo { font-size: 20px; font-weight: 700; }
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; display: none; }
+  #crosshair::before, #crosshair::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 4px #000; }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+  #toast { position: absolute; left: 50%; top: 18%; transform: translateX(-50%); font-size: 19px; font-weight: 700; text-shadow: 0 2px 6px #000; opacity: 0; transition: opacity 0.3s; text-align: center; }
+  #damage { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, transparent 55%, rgba(220,38,38,0.75) 100%); opacity: 0; transition: opacity 0.15s; z-index: 6; }
+  /* ---------- Screens ---------- */
+  .screen { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; z-index: 10; background: linear-gradient(180deg, rgba(10,10,30,0.35), rgba(10,10,30,0.72)); padding: 20px; }
+  .screen h1 { font-size: 64px; margin: 0; letter-spacing: 4px; color: var(--accent); text-shadow: 0 4px 24px rgba(0,0,0,0.8); font-style: italic; }
+  .screen h2 { font-size: 30px; margin: 0 0 8px; color: var(--accent); }
+  .screen p { max-width: 560px; font-size: 17px; line-height: 1.5; }
+  .screen .sub { color: #fbbf24; letter-spacing: 3px; font-weight: 700; margin-bottom: 4px; }
+  button { pointer-events: auto; cursor: pointer; font: inherit; font-weight: 800; font-size: 17px; color: #111; background: var(--accent); border: none; border-radius: 8px; padding: 12px 26px; margin: 6px; }
+  button:hover { background: #ffe066; }
+  button.ghost { background: rgba(255,255,255,0.15); color: var(--text); border: 1px solid rgba(255,255,255,0.4); }
+  .controls { display: grid; grid-template-columns: auto auto; gap: 4px 18px; text-align: left; font-size: 14px; background: var(--panel); padding: 12px 18px; border-radius: 10px; margin: 12px 0; }
+  .controls b { color: var(--accent); }
+  #mission-list { text-align: left; font-size: 15px; background: var(--panel); padding: 12px 18px; border-radius: 10px; margin: 10px 0; min-width: 420px; }
+  .mission-row { padding: 3px 0; color: #cbd5e1; }
+  .mission-row.current { color: var(--accent); font-weight: 700; }
+  .mission-row.done { color: #4ade80; }
+  #complete-reward, #intro-text { font-size: 19px; }
+  .credit { margin-top: 18px; font-size: 12px; color: #cbd5e1; }
+</style>
+</head>
+<body>
+<canvas id="game" aria-label="SOLMAR HEAT: an open-world crime game set in the fictional city of Solmar"></canvas>
+<p id="status" role="status" aria-live="polite"></p>
+<div id="damage"></div>
+
+<div id="hud">
+  <div id="topleft" class="panel">
+    <div id="cash">$120</div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+    <div id="health-num">RAE DELGADO — HEALTH</div>
+  </div>
+  <div id="topright" class="panel">
+    <div id="stars"></div>
+    <div id="clock">17:30</div>
+    <div id="timer"></div>
+  </div>
+  <div id="bottomleft">
+    <canvas id="minimap" width="200" height="200"></canvas>
+    <div id="mission-label">FREE ROAM</div>
+    <div id="objective"><span id="objective-text">Press Start to begin</span></div>
+  </div>
+  <div id="bottomright">
+    <div id="speed"></div>
+    <div id="ammo">12 / 60</div>
+  </div>
+  <div id="crosshair"></div>
+  <div id="toast"></div>
+</div>
+
+<div id="screen-title" class="screen">
+  <div class="sub">WELCOME TO</div>
+  <h1>SOLMAR HEAT</h1>
+  <p>Sun, sea and bad decisions. Rae Delgado is back in Solmar owing the Marlin Club
+  more money than she has — and fixer Vic Marlowe has eight jobs that will clear the
+  debt, if the police, the rivals and the clock do not get her first.</p>
+  <div class="controls">
+    <b>W A S D</b><span>Move / drive</span>
+    <b>Mouse</b><span>Look around / aim</span>
+    <b>Shift</b><span>Sprint</span>
+    <b>Space</b><span>Jump / handbrake</span>
+    <b>E</b><span>Enter / exit car (steal any car)</span>
+    <b>Click</b><span>Shoot pistol</span>
+    <b>R</b><span>Reload</span>
+    <b>P / Esc</b><span>Pause</span>
+  </div>
+  <div>
+    <button id="btn-start">START STORY</button>
+    <button id="btn-continue" class="ghost">CONTINUE</button>
+  </div>
+  <div id="title-save-info" class="credit">No save yet — start a new story.</div>
+  <div class="credit">An original game. Solmar, Rae Delgado and Vic Marlowe are fictional — nothing here is from any existing game.</div>
+</div>
+
+<div id="screen-intro" class="screen">
+  <h2 id="intro-title">First Wheels</h2>
+  <p id="intro-text"></p>
+  <div><button id="btn-begin">BEGIN JOB</button></div>
+</div>
+
+<div id="screen-pause" class="screen">
+  <h2>PAUSED</h2>
+  <div id="mission-list"></div>
+  <div>
+    <button id="btn-resume">RESUME</button>
+    <button id="btn-restart-mission" class="ghost">RESTART JOB</button>
+    <button id="btn-save" class="ghost">SAVE GAME</button>
+    <button id="btn-quit" class="ghost">QUIT TO TITLE</button>
+  </div>
+</div>
+
+<div id="screen-busted" class="screen">
+  <h2>BUSTED</h2>
+  <p>Solmar PD caught up with Rae. Bail is $100 — Vic is not happy, but the jobs are still waiting.</p>
+  <div><button id="btn-busted-free">PAY BAIL — WALK FREE</button></div>
+</div>
+
+<div id="screen-wasted" class="screen">
+  <h2>WASTED</h2>
+  <p>Rae went down in the streets of Solmar. The Marlin Club keeps the tab open — get back up and finish the jobs.</p>
+  <div><button id="btn-wasted-retry">GET BACK UP</button></div>
+</div>
+
+<div id="screen-complete" class="screen">
+  <h2 id="complete-title">Mission complete</h2>
+  <p id="complete-reward"></p>
+  <div><button id="btn-next">NEXT JOB</button></div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
